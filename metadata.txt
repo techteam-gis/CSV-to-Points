@@ -13,11 +13,11 @@ about=This plugin allows users to quickly and intuitively create point layers fr
 
  Ideal for those who frequently work with CSV files containing latitude/longitude or address data, this plugin enables point generation without the need to open complex configuration dialogs.
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/techteam-gis/CSV-to-Points/issues
+repository=https://github.com/techteam-gis/CSV-to-Points
 hasProcessingProvider=no
 tags=csv, points, geocoding, latlon, drag-and-drop
-homepage=http://homepage
+homepage=https://github.com/techteam-gis/CSV-to-Points
 category=Vector
 icon=icon.png
 experimental=False
