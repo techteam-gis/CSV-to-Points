@@ -1,0 +1,26 @@
+[general]
+name=CSV to Points
+qgisMinimumVersion=3.22
+description=Easily create a point layer from latitude/longitude or address fields by simply dragging a CSV file into the plugin.
+version=1.0
+author=TechTeam Solutions LLC
+email=info@techteam.co.jp
+about=This plugin allows users to quickly and intuitively create point layers from CSV files. Simply drag and drop a CSV file into the plugin window, and the plugin will automatically detect fields containing latitude/longitude or address data, enabling you to generate a point layer with a single click.
+
+    - Supports point generation using either coordinates or addresses
+    - Relevant fields are automatically detected, but can also be selected manually via dropdown menus
+    - Users can customize and add field names to be used in automatic detection
+
+ Ideal for those who frequently work with CSV files containing latitude/longitude or address data, this plugin enables point generation without the need to open complex configuration dialogs.
+
+tracker=http://bugs
+repository=http://repo
+hasProcessingProvider=no
+tags=csv, points, geocoding, latlon, drag-and-drop
+homepage=http://homepage
+category=Vector
+icon=icon.png
+experimental=False
+deprecated=False
+server=False
+

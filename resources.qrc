@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/plugins/csv_to_points" >
+        <file>icon.png</file>
+    <file>setting.png</file>
+    </qresource>
+</RCC>
