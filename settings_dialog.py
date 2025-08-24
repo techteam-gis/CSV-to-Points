@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+import re
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QDialog
 from .settings_store import SettingsStore
 from .provider_registry import iter_providers
+from .field_detector import LAT_KEYWORDS, LON_KEYWORDS, ADDR_KEYWORDS, INITIAL_CUSTOM_KEYWORDS
 
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -29,8 +31,7 @@ class SettingsDialog(QDialog, FORM_CLASS):
             idx = next((i for i in range(self.provider_combo.count()) if self.provider_combo.itemData(i)=='nominatim'), 0)
         self.provider_combo.setCurrentIndex(idx)
 
-        # フィールド自動判定の初期値を設定
-        from .field_detector import LAT_KEYWORDS, LON_KEYWORDS, ADDR_KEYWORDS, INITIAL_CUSTOM_KEYWORDS
+    # フィールド自動判定の初期値を設定
         customs = self.store.get_all_custom_keywords()
         lat_init = customs.get('lat') or INITIAL_CUSTOM_KEYWORDS['lat']
         lon_init = customs.get('lon') or INITIAL_CUSTOM_KEYWORDS['lon']
@@ -84,7 +85,6 @@ class SettingsDialog(QDialog, FORM_CLASS):
 
     # ---------- 保存 ----------
     def accept(self):
-        import re
         def _clean(txt: str) -> str:
             if txt is None:
                 return ''

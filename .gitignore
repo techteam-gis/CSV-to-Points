@@ -208,6 +208,7 @@ __marimo__/
 
 # Project-specific ignores
 .DS_Store
+.gitignore
 README.html
 README.txt
 pb_tool.cfg

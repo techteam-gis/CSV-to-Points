@@ -199,25 +199,29 @@ class GeocodeTask(QgsTask):
                                 ch[idx_postal] = type_map.get('postal_code','')
                             elif idx_postal_old >= 0:
                                 ch[idx_postal_old] = type_map.get('postal_code','')
-                        loc = (raw.get('geometry') or {}).get('location') or {}
+                        # lat/lng は数値、partial_match は bool
                         if idx_lat >= 0:
-                            ch[idx_lat] = loc.get('lat','')
+                            ch[idx_lat] = float(lat)
                         if idx_lng >= 0:
-                            ch[idx_lng] = loc.get('lng','')
+                            ch[idx_lng] = float(lon)
                         if idx_partial >= 0:
-                            ch[idx_partial] = 'true' if raw.get('partial_match') else 'false'
+                            ch[idx_partial] = bool(raw.get('partial_match'))
                         # ---- 非 Google provider 用 ----
                         if has_nominatim and idx_nom_display >= 0:
                             # Nominatim
                             if idx_nom_place_id >= 0:
-                                ch[idx_nom_place_id] = raw.get('place_id','')
+                                # place_id を文字列として保持
+                                ch[idx_nom_place_id] = str(raw.get('place_id')) if raw.get('place_id') is not None else None
                             ch[idx_nom_display] = raw.get('display_name','')
                             if idx_nom_rank >= 0:
-                                ch[idx_nom_rank] = raw.get('place_rank','')
+                                try:
+                                    ch[idx_nom_rank] = int(raw.get('place_rank')) if raw.get('place_rank') is not None else None
+                                except Exception:
+                                    ch[idx_nom_rank] = None
                             if idx_n_lat >= 0:
-                                ch[idx_n_lat] = raw.get('lat','') or raw.get('latitude','') or ''
+                                ch[idx_n_lat] = float(lat)
                             if idx_n_lon >= 0:
-                                ch[idx_n_lon] = raw.get('lon','') or raw.get('longitude','') or ''
+                                ch[idx_n_lon] = float(lon)
                         if has_mapbox and idx_map_place_name >= 0:
                             ch[idx_map_id] = raw.get('id','') if idx_map_id >= 0 else ''
                             ch[idx_map_place_name] = raw.get('place_name','')
@@ -238,10 +242,9 @@ class GeocodeTask(QgsTask):
                             if idx_map_accuracy >= 0:
                                 ch[idx_map_accuracy] = (raw.get('properties') or {}).get('accuracy','')
                             if idx_n_lat >= 0:
-                                # geometry coordinates already used -> lon,lat vars; we stored lat/lon earlier; reuse
-                                ch[idx_n_lat] = lat
+                                ch[idx_n_lat] = float(lat)
                             if idx_n_lon >= 0:
-                                ch[idx_n_lon] = lon
+                                ch[idx_n_lon] = float(lon)
                         if has_opencage and idx_oc_formatted >= 0:
                             ch[idx_oc_formatted] = raw.get('formatted','')
                             if idx_oc_postcode >= 0:
@@ -249,11 +252,14 @@ class GeocodeTask(QgsTask):
                                 if isinstance(comps, dict):
                                     ch[idx_oc_postcode] = comps.get('postcode','')
                             if idx_oc_conf >= 0:
-                                ch[idx_oc_conf] = raw.get('confidence','')
+                                try:
+                                    ch[idx_oc_conf] = int(raw.get('confidence')) if raw.get('confidence') is not None else None
+                                except Exception:
+                                    ch[idx_oc_conf] = None
                             if idx_n_lat >= 0:
-                                ch[idx_n_lat] = lat
+                                ch[idx_n_lat] = float(lat)
                             if idx_n_lon >= 0:
-                                ch[idx_n_lon] = lon
+                                ch[idx_n_lon] = float(lon)
                         if has_here and idx_here_title >= 0:
                             ch[idx_here_id] = raw.get('id','') if idx_here_id >= 0 else ''
                             ch[idx_here_title] = raw.get('title','')
@@ -262,20 +268,23 @@ class GeocodeTask(QgsTask):
                                 if isinstance(addr, dict):
                                     ch[idx_here_postal] = addr.get('postalCode','')
                             if idx_n_lat >= 0:
-                                ch[idx_n_lat] = lat
+                                ch[idx_n_lat] = float(lat)
                             if idx_n_lon >= 0:
-                                ch[idx_n_lon] = lon
+                                ch[idx_n_lon] = float(lon)
                         if has_yahoo and idx_yj_name >= 0:
                             ch[idx_yj_uid] = raw.get('Id','') if idx_yj_uid >= 0 else ''
                             ch[idx_yj_name] = raw.get('Name','')
                             if idx_yj_lvl >= 0:
                                 prop = raw.get('Property') or {}
                                 if isinstance(prop, dict):
-                                    ch[idx_yj_lvl] = prop.get('AddressMatchingLevel','')
+                                    try:
+                                        ch[idx_yj_lvl] = int(prop.get('AddressMatchingLevel')) if prop.get('AddressMatchingLevel') is not None else None
+                                    except Exception:
+                                        ch[idx_yj_lvl] = None
                             if idx_n_lat >= 0:
-                                ch[idx_n_lat] = lat
+                                ch[idx_n_lat] = float(lat)
                             if idx_n_lon >= 0:
-                                ch[idx_n_lon] = lon
+                                ch[idx_n_lon] = float(lon)
                     attr_changes[fid] = ch
                 for fid, err in self._fail:
                     ch = {}

@@ -43,7 +43,19 @@ from .opencage_geocoder import OpenCageGeocoder
 from .here_geocoder import HereGeocoder
 from .yahoojp_geocoder import YahooJapanGeocoder
 from .settings_store import SettingsStore
-from qgis.core import QgsProject
+from qgis.core import (
+    QgsProject,
+    QgsVectorLayer,
+    QgsFields,
+    QgsField,
+    QgsGeometry,
+    QgsPointXY,
+    QgsFeature,
+    QgsApplication,
+)
+from qgis.PyQt.QtCore import QVariant
+import csv
+import time
 import os.path
 
 
@@ -245,10 +257,9 @@ class CsvToPointsPlugin:
             })
             # 追加: 行数カウント (ヘッダ除く) & ファイル名
             try:
-                import csv as _csv
                 row_count = 0
                 with open(path, 'r', encoding=meta.get('encoding','utf-8'), errors='replace', newline='') as fcsv:
-                    reader = _csv.reader(fcsv, delimiter=meta.get('delimiter',','))
+                    reader = csv.reader(fcsv, delimiter=meta.get('delimiter',','))
                     next(reader, None)  # skip header
                     for _ in reader:
                         row_count += 1
@@ -295,9 +306,23 @@ class CsvToPointsPlugin:
             except Exception as e:
                 self.iface.messageBar().pushCritical('CSV to Points', self.tr('レイヤ生成失敗: {err}').format(err=e))
             return
-        from qgis.core import QgsVectorLayer, QgsFields, QgsField, QgsGeometry, QgsPointXY, QgsFeature
-        from qgis.PyQt.QtCore import QVariant, QMetaType
-        import csv, time
+    # 依存インポートはモジュール先頭へ移動済み
+        # Qt5 向け: 非推奨コンストラクタを避け、QVariant 型を明示
+        def _mk_field(name: str, qvar_type):
+            """QgsField を型付きで生成（QGIS 3.34/3.40 両対応）。
+            可能ならコンストラクタで型を指定し、古い環境で失敗した場合のみ setType にフォールバック。
+            """
+            try:
+                # QGIS 3 系ではコンストラクタで QVariant 型指定が可能
+                return QgsField(name, qvar_type)
+            except Exception:
+                f = QgsField(name)
+                # 旧 API 環境向けフォールバック（3.40 では非推奨だがここには到達しない想定）
+                try:
+                    f.setType(qvar_type)
+                except Exception:
+                    pass
+                return f
         sync_threshold = store.get_sync_threshold()
         force_sync = store.get_sync_all()
         rows = []
@@ -317,7 +342,7 @@ class CsvToPointsPlugin:
             pr = layer.dataProvider()
             flds = QgsFields()
             for col in header:
-                flds.append(QgsField(col, QMetaType.QString))
+                flds.append(_mk_field(col, QVariant.String))
             pr.addAttributes(flds)
             layer.updateFields()
             for row in rows:
@@ -335,32 +360,83 @@ class CsvToPointsPlugin:
         pr = layer.dataProvider()
         flds = QgsFields()
         for col in header:
-            flds.append(QgsField(col, QMetaType.QString))
+            flds.append(_mk_field(col, QVariant.String))
         if want_geocode:
+            # プロバイダ別の型付きフィールドを追加（QVariant 型指定）
+            def _add(name: str, qvar_type):
+                if layer.fields().indexFromName(name) < 0:
+                    flds.append(_mk_field(name, qvar_type))
             if provider == 'google':
-                for cname in ['status','error','location_type','formatted_address','place_id','types','postal_code','lat','lng','partial_match']:
-                    if layer.fields().indexFromName(cname) < 0:
-                        flds.append(QgsField(cname, QMetaType.QString))
+                # lat/lng は Double, partial_match は Bool
+                for cname, mtype in [
+                    ('status', QVariant.String),
+                    ('error', QVariant.String),
+                    ('location_type', QVariant.String),
+                    ('formatted_address', QVariant.String),
+                    ('place_id', QVariant.String),
+                    ('types', QVariant.String),
+                    ('postal_code', QVariant.String),
+                    ('lat', QVariant.Double),
+                    ('lng', QVariant.Double),
+                    ('partial_match', QVariant.Bool),
+                ]:
+                    _add(cname, mtype)
             elif provider == 'nominatim':
-                for cname in ['status','error','place_id','display_name','lat','lng','place_rank']:
-                    if layer.fields().indexFromName(cname) < 0:
-                        flds.append(QgsField(cname, QMetaType.QString))
+                for cname, mtype in [
+                    ('status', QVariant.String),
+                    ('error', QVariant.String),
+                    ('place_id', QVariant.String),  # 文字列に変更
+                    ('display_name', QVariant.String),
+                    ('lat', QVariant.Double),
+                    ('lng', QVariant.Double),
+                    ('place_rank', QVariant.Int),
+                ]:
+                    _add(cname, mtype)
             elif provider == 'mapbox':
-                for cname in ['status','error','id','place_name','postcode','lat','lng','accuracy']:
-                    if layer.fields().indexFromName(cname) < 0:
-                        flds.append(QgsField(cname, QMetaType.QString))
+                for cname, mtype in [
+                    ('status', QVariant.String),
+                    ('error', QVariant.String),
+                    ('id', QVariant.String),
+                    ('place_name', QVariant.String),
+                    ('postcode', QVariant.String),
+                    ('lat', QVariant.Double),
+                    ('lng', QVariant.Double),
+                    ('accuracy', QVariant.String),
+                ]:
+                    _add(cname, mtype)
             elif provider == 'opencage':
-                for cname in ['status','error','formatted','postcode','lat','lng','confidence']:
-                    if layer.fields().indexFromName(cname) < 0:
-                        flds.append(QgsField(cname, QMetaType.QString))
+                for cname, mtype in [
+                    ('status', QVariant.String),
+                    ('error', QVariant.String),
+                    ('formatted', QVariant.String),
+                    ('postcode', QVariant.String),
+                    ('lat', QVariant.Double),
+                    ('lng', QVariant.Double),
+                    ('confidence', QVariant.Int),
+                ]:
+                    _add(cname, mtype)
             elif provider == 'here':
-                for cname in ['status','error','id','title','postalCode','lat','lng']:
-                    if layer.fields().indexFromName(cname) < 0:
-                        flds.append(QgsField(cname, QMetaType.QString))
+                for cname, mtype in [
+                    ('status', QVariant.String),
+                    ('error', QVariant.String),
+                    ('id', QVariant.String),
+                    ('title', QVariant.String),
+                    ('postalCode', QVariant.String),
+                    ('lat', QVariant.Double),
+                    ('lng', QVariant.Double),
+                ]:
+                    _add(cname, mtype)
             elif provider == 'yahoojp':
-                for cname in ['status','error','Uid','Name','lat','lng','AddressMatchingLevel']:
-                    if layer.fields().indexFromName(cname) < 0:
-                        flds.append(QgsField(cname, QMetaType.QString))
+                for cname, mtype in [
+                    ('status', QVariant.String),
+                    ('error', QVariant.String),
+                    ('Uid', QVariant.String),
+                    ('Name', QVariant.String),
+                    ('lat', QVariant.Double),
+                    ('lng', QVariant.Double),
+                    ('AddressMatchingLevel', QVariant.Int),  # 整数に変更
+                ]:
+                    _add(cname, mtype)
         pr.addAttributes(flds)
         layer.updateFields()
         addr_idx = header.index(addr_field)
@@ -421,9 +497,15 @@ class CsvToPointsPlugin:
                                         pass
                                 gdict['postal_code'] = type_map.get('postal_code','')
                             loc = (raw.get('geometry') or {}).get('location') or {}
-                            gdict['lat'] = str(loc.get('lat',''))
-                            gdict['lng'] = str(loc.get('lng',''))
-                            gdict['partial_match'] = 'true' if raw.get('partial_match') else 'false'
+                            try:
+                                gdict['lat'] = float(loc.get('lat')) if loc.get('lat') is not None else None
+                            except Exception:
+                                gdict['lat'] = None
+                            try:
+                                gdict['lng'] = float(loc.get('lng')) if loc.get('lng') is not None else None
+                            except Exception:
+                                gdict['lng'] = None
+                            gdict['partial_match'] = bool(raw.get('partial_match'))
                         added += 1
                     else:
                         status = 'FAIL'
@@ -438,13 +520,23 @@ class CsvToPointsPlugin:
                         gdict['error'] = error
                         if gdict['location_type'] == '' and precision:
                             gdict['location_type'] = precision
-                        ordered = [gdict[k] for k in ['status','error','location_type','formatted_address','place_id','types','postal_code','lat','lng','partial_match']]
+                        ordered = [
+                            gdict['status'], gdict['error'], gdict['location_type'], gdict['formatted_address'],
+                            gdict['place_id'], gdict['types'], gdict['postal_code'],
+                            gdict['lat'], gdict['lng'], gdict['partial_match']
+                        ]
                         attrs += ordered
                     elif provider == 'nominatim':
                         if 'res' in locals() and getattr(res,'status','') == 'OK':
-                            attrs += [status, error, str(getattr(res,'raw',{}).get('place_id','') or ''), str(getattr(res,'raw',{}).get('display_name','') or ''), str(res.lat or ''), str(res.lon or ''), str(getattr(res,'raw',{}).get('place_rank','') or '')]
+                            raw = getattr(res,'raw',{}) or {}
+                            pid = str(raw.get('place_id')) if raw.get('place_id') is not None else None
+                            try:
+                                prk = int(raw.get('place_rank')) if raw.get('place_rank') is not None else None
+                            except Exception:
+                                prk = None
+                            attrs += [status, error, pid, raw.get('display_name','') or '', float(res.lat), float(res.lon), prk]
                         else:
-                            attrs += [status, error,'','','','','']
+                            attrs += [status, error, None, None, None, None, None]
                     elif provider == 'mapbox':
                         if 'res' in locals() and getattr(res,'status','') == 'OK':
                             raw = getattr(res,'raw',{}) or {}
@@ -460,30 +552,38 @@ class CsvToPointsPlugin:
                                     except Exception:
                                         pass
                             accuracy = (raw.get('properties') or {}).get('accuracy','')
-                            attrs += [status, error, raw.get('id',''), raw.get('place_name',''), postcode, str(res.lat or ''), str(res.lon or ''), accuracy]
+                            attrs += [status, error, raw.get('id',''), raw.get('place_name',''), postcode, float(res.lat), float(res.lon), accuracy]
                         else:
-                            attrs += [status, error,'','','','','','']
+                            attrs += [status, error, None, None, None, None, None, None]
                     elif provider == 'opencage':
                         if 'res' in locals() and getattr(res,'status','') == 'OK':
                             raw = getattr(res,'raw',{}) or {}
                             comps = raw.get('components') or {}
-                            attrs += [status, error, raw.get('formatted',''), comps.get('postcode',''), str(res.lat or ''), str(res.lon or ''), str(raw.get('confidence',''))]
+                            try:
+                                conf = int(raw.get('confidence')) if raw.get('confidence') is not None else None
+                            except Exception:
+                                conf = None
+                            attrs += [status, error, raw.get('formatted',''), comps.get('postcode',''), float(res.lat), float(res.lon), conf]
                         else:
-                            attrs += [status, error,'','','','','']
+                            attrs += [status, error, None, None, None, None, None]
                     elif provider == 'here':
                         if 'res' in locals() and getattr(res,'status','') == 'OK':
                             raw = getattr(res,'raw',{}) or {}
                             addr = raw.get('address') or {}
-                            attrs += [status, error, raw.get('id',''), raw.get('title',''), addr.get('postalCode',''), str(res.lat or ''), str(res.lon or '')]
+                            attrs += [status, error, raw.get('id',''), raw.get('title',''), addr.get('postalCode',''), float(res.lat), float(res.lon)]
                         else:
-                            attrs += [status, error,'','','','','']
+                            attrs += [status, error, None, None, None, None, None]
                     elif provider == 'yahoojp':
                         if 'res' in locals() and getattr(res,'status','') == 'OK':
                             raw = getattr(res,'raw',{}) or {}
                             prop = raw.get('Property') or {}
-                            attrs += [status, error, raw.get('Id',''), raw.get('Name',''), str(res.lat or ''), str(res.lon or ''), prop.get('AddressMatchingLevel','')]
+                            try:
+                                lvl = int(prop.get('AddressMatchingLevel')) if prop.get('AddressMatchingLevel') is not None else None
+                            except Exception:
+                                lvl = None
+                            attrs += [status, error, raw.get('Id',''), raw.get('Name',''), float(res.lat), float(res.lon), lvl]
                         else:
-                            attrs += [status, error,'','','','','']
+                            attrs += [status, error, None, None, None, None, None]
                 feat.setAttributes(attrs)
                 if geom:
                     feat.setGeometry(geom)
@@ -501,17 +601,17 @@ class CsvToPointsPlugin:
             attrs = list(r)
             if want_geocode:
                 if provider == 'google':
-                    attrs += ['']*10
+                    attrs += [None]*10
                 elif provider == 'nominatim':
-                    attrs += ['']*7
+                    attrs += [None]*7
                 elif provider == 'mapbox':
-                    attrs += ['']*8
+                    attrs += [None]*8
                 elif provider == 'opencage':
-                    attrs += ['']*7
+                    attrs += [None]*7
                 elif provider == 'here':
-                    attrs += ['']*7
+                    attrs += [None]*7
                 elif provider == 'yahoojp':
-                    attrs += ['']*7
+                    attrs += [None]*7
             feat.setAttributes(attrs)
             pr.addFeatures([feat])
         layer.updateExtents()
@@ -535,7 +635,6 @@ class CsvToPointsPlugin:
             self._active_task = task
             self._pending_layer = layer
             try:
-                from qgis.core import QgsApplication
                 task.progressChanged.connect(lambda val: self.drop_panel.update_progress(val))
                 self.drop_panel.cancel_btn.clicked.connect(task.cancel)
                 QgsApplication.taskManager().addTask(task)
@@ -624,10 +723,7 @@ class CsvToPointsPlugin:
         # 将来的に設定ダイアログなどで self.dlg を使う
         # return silently
         return
-        # 既存ダイアログは必要時のみ表示（今は利用しない）/ ウインドウは上で表示済み
-        if self.window:
-            self.window.show()
-            self.window.raise_()
+
         # 既存ダイアログは必要時のみ表示（今は利用しない）
         # self.dlg.show()
         # result = self.dlg.exec_()

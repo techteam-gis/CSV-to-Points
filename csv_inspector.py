@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 import csv
 import codecs
+import sys
+import json
 from typing import Dict, List, Optional
 
 try:
@@ -71,7 +73,6 @@ class CsvInspector:
 
 # Simple manual test when run standalone
 if __name__ == '__main__':  # pragma: no cover
-    import sys, json
     insp = CsvInspector()
     for p in sys.argv[1:]:
         print(p)

@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 from qgis.core import QgsFields, QgsField, QgsVectorLayer, QgsFeature, QgsPointXY, QgsGeometry
-from qgis.PyQt.QtCore import QVariant, QMetaType
+from qgis.PyQt.QtCore import QVariant
 import csv
 from .coordinate_parser import parse_lat, parse_lon
 
@@ -14,10 +14,21 @@ class PointLayerBuilder:
         pr = layer.dataProvider()
         # 既存属性: CSV の全列
         fields = QgsFields()
+        # QgsField: 可能ならコンストラクタで型指定、古い環境のみ setType にフォールバック
+        def _mk_field(name: str, qvar_type):
+            try:
+                return QgsField(name, qvar_type)
+            except Exception:
+                f = QgsField(name)
+                try:
+                    f.setType(qvar_type)
+                except Exception:
+                    pass
+                return f
         for col in header:
-            fields.append(QgsField(col, QMetaType.QString))
+            fields.append(_mk_field(col, QVariant.String))
         # 補助列 (geocode 予定枠)
-        fields.append(QgsField('_parse_error', QMetaType.QString))
+        fields.append(_mk_field('_parse_error', QVariant.String))
         pr.addAttributes(fields)
         layer.updateFields()
 

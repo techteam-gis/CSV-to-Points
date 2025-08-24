@@ -28,7 +28,7 @@ class SettingsStore:
 
     DEFAULT_USER_AGENT = 'CsvToPointsPlugin/0.1 (set your email)'
     DEFAULT_PROVIDER = 'nominatim'
-    DEFAULT_SYNC_THRESHOLD = 200
+    DEFAULT_SYNC_THRESHOLD = 10
 
     def get_user_agent(self) -> str:
         return self.qs.value(self.KEY_USER_AGENT, self.DEFAULT_USER_AGENT, type=str)
